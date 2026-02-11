@@ -1,0 +1,43 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: custom-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: kubernetes-alerts
+      rules:
+        # Alert when CPU > 80%
+        - alert: HighCPUUsage
+          expr: |
+            100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CPU cao tren {{ $labels.instance }}"
+            description: "CPU usage > 80% trong 5 phut"
+
+        # Alert when Memory > 85%
+        - alert: HighMemoryUsage
+          expr: |
+            (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 85
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Memory cao tren {{ $labels.instance }}"
+            description: "Memory usage > 85% trong 5 phut"
+
+        # Alert when Pod restarts > 5 times in 1 hour
+        - alert: PodCrashLooping
+          expr: |
+            increase(kube_pod_container_status_restarts_total[1h]) > 5
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod {{ $labels.pod }} dang crash loop"
+            description: "Pod {{ $labels.pod }} da restart > 5 lan trong 1 gio"

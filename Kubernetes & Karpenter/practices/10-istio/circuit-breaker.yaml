@@ -1,0 +1,18 @@
+# Circuit Breaker: Ngat mach khi service loi lien tuc
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: my-app-circuit-breaker
+spec:
+  host: my-app-service
+  trafficPolicy:
+    connectionPool:
+      http:
+        h2UpgradePolicy: DEFAULT
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 1000
+    outlierDetection:
+      consecutive5xxErrors: 5       # Sau 5 loi 500 lien tiep
+      interval: 30s                 # Kiem tra moi 30 giay
+      baseEjectionTime: 30s        # Ngat trong 30 giay
+      maxEjectionPercent: 50        # Toi da ngat 50% pods

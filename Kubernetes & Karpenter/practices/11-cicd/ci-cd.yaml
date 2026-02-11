@@ -1,0 +1,90 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  AWS_REGION: ap-southeast-1
+  ECR_REPOSITORY: my-app
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  # ==================== JOB 1: CI (Test) ====================
+  test:
+    name: "Run Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+
+  # ==================== JOB 2: Build & Push Docker ====================
+  build:
+    name: "Build & Push Image"
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+  # ==================== JOB 3: CD (Deploy) ====================
+  deploy:
+    name: "Deploy to Kubernetes"
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout manifest repo
+        uses: actions/checkout@v4
+        with:
+          repository: YOUR_USERNAME/k8s-manifests
+          token: ${{ secrets.GIT_TOKEN }}
+
+      - name: Update image tag in deployment
+        run: |
+          sed -i "s|image: .*my-app:.*|image: 123456789.dkr.ecr.ap-southeast-1.amazonaws.com/my-app:${{ github.sha }}|" apps/my-app/deployment.yaml
+
+      - name: Commit and push
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add .
+          git commit -m "Update my-app to ${{ github.sha }}"
+          git push

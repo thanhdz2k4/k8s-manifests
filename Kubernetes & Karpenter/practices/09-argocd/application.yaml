@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-web-app
+  namespace: argocd
+spec:
+  project: default
+
+  # SOURCE: Lấy YAML từ Git repo nào?
+  source:
+    repoURL: https://github.com/YOUR_USERNAME/k8s-manifests.git
+    targetRevision: main
+    path: apps/my-app
+
+  # DESTINATION: Deploy vào cluster nào?
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+
+  # SYNC POLICY: Tự động deploy khi Git thay đổi
+  syncPolicy:
+    automated:
+      prune: true         # Xoá resource nếu bị xoá khỏi Git
+      selfHeal: true      # Tự sửa nếu ai đó sửa tay trên cluster
+    syncOptions:
+      - CreateNamespace=true
